@@ -12,7 +12,8 @@
     "test": "vitest run",
     "postinstall": "prisma generate",
     "db:reset": "prisma migrate deploy && prisma db seed",
-    "receipts:render": "tsx scripts/render-receipts.ts"
+    "receipts:render": "tsx scripts/render-receipts.ts",
+    "donations:capture": "tsx scripts/capture-sandbox-donations.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.113",

@@ -15,6 +15,7 @@ import {
   RECEIPTS,
   receiptTotalMinor,
 } from "../seed/data";
+import { readSandboxDonations, requireCapturedDonations } from "../seed/sandbox-donations";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -34,6 +35,8 @@ async function main() {
   const treasurerEmail = requireEnv("SEED_TREASURER_EMAIL");
   const treasurerPassword = requireEnv("SEED_TREASURER_PASSWORD");
   const payoutEmail = requireEnv("PAYPAL_CHARITY_RECEIVER_EMAIL");
+  // Checked before the wipe, so a missing capture leaves the database untouched.
+  const donations = requireCapturedDonations(DONATIONS, readSandboxDonations());
 
   await truncateAllTables(prisma);
 
@@ -69,12 +72,13 @@ async function main() {
     },
   });
 
-  // These ids never existed in PayPal, so a live lookup will not find them.
+  // Real sandbox ids, so verifier check 6 can confirm them. capturedAt is the
+  // story date for the demo, not PayPal's capture time.
   await prisma.donation.createMany({
-    data: DONATIONS.map((donation, index) => ({
+    data: donations.map((donation) => ({
       projectId: project.id,
-      paypalOrderId: `SEED-ORDER-${index + 1}`,
-      paypalCaptureId: `SEED-CAPTURE-${index + 1}`,
+      paypalOrderId: donation.orderId,
+      paypalCaptureId: donation.captureId,
       amountMinor: donation.amountMinor,
       currency,
       status: "CAPTURED" as const,

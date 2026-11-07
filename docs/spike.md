@@ -115,6 +115,10 @@ The SDK printed two deprecation warnings at runtime, both for code the spike use
 1. Set `PAYPAL_CHARITY_RECEIVER_EMAIL` to a sandbox Personal account (developer.paypal.com > Testing Tools > Sandbox Accounts). Then run `npm run spike -- payout`.
 2. Remove the API restriction on the Gemini key, or create a new key in Google AI Studio. Then run `npm run spike -- vision`.
 
+## Sandbox donation captures
+
+Card-funded orders with no buyer step do not work on this account: `POST /v2/checkout/orders` with `payment_source.card` and test card 4111 1111 1111 1111 returned 422 `PAYER_CANNOT_PAY` (PHP 1.00, nothing created). Cause not established. Seeded donations therefore use the normal buyer approval flow through `npm run donations:capture`.
+
 ## Still unverified
 
 - From memory, not tested: PayPal's Transaction Search data can lag by up to a few hours. If so, `list_transactions` could miss a fresh donation and wrongly trigger `ESCALATED_LEDGER_MISMATCH`, and `get_order` is the better tool for verifier check 6.
