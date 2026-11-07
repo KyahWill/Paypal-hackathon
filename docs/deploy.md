@@ -5,14 +5,14 @@
 ## What happens on each deploy
 
 ```
-npm ci
+npm ci --include=dev
 npx prisma migrate deploy
 npm run db:seed-on-deploy
 npm run build
 npm start
 ```
 
-These run in the build command because the Free plan has no pre-deploy command, shell or one-off jobs. If any step fails, the deploy fails and the previous version keeps running. A migration that already ran stays applied, though.
+`--include=dev` is there because `prisma`, `tsx` and `dotenv` are dev dependencies. These run in the build command because the Free plan has no pre-deploy command, shell or one-off jobs. If any step fails, the deploy fails and the previous version keeps running. A migration that already ran stays applied, though.
 
 `db:seed-on-deploy` seeds only if the database has no projects, so a normal redeploy never wipes data.
 
@@ -36,6 +36,12 @@ These run in the build command because the Free plan has no pre-deploy command, 
 4. Open `https://<your-service>.onrender.com/api/health`. It returns `{"status":"ok"}` when the app can reach the database, and a 503 when it cannot.
 
 Neon must be empty, or hold only these migrations. Otherwise `prisma migrate deploy` stops with P3005 and changes nothing.
+
+### If the service was not created from the Blueprint
+
+A service created by hand gets Render's default build command, which skips migrations and the seed. The app still deploys and `/api/health` still passes, but pages fail with `P2021: The table public.Project does not exist`. The donation page can return HTTP 200 while this happens, so look at the page itself.
+
+Paste the `buildCommand` from `render.yaml` into Settings > Build & Deploy > Build Command, then choose Manual Deploy > Deploy latest commit. A hand-made service also never prompted for variables, so compare Environment with `render.yaml`. `SESSION_SECRET` has to be set by hand there.
 
 ## Everyday deploys
 

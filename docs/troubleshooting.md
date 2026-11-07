@@ -50,6 +50,8 @@ If a ZTNA or company network is blocking it, ask whoever runs it for an exceptio
 
 **`/api/health` returns 503.** The app is up but cannot reach the database. Check `DATABASE_URL` in Render. The log shows only an error name, on purpose, so that connection details stay out of it.
 
+**`P2021`, `public.Project does not exist`.** Migrations never ran, usually because the service was not created from the Blueprint. See [deploy.md](deploy.md#if-the-service-was-not-created-from-the-blueprint).
+
 **The first request takes about a minute.** The Free plan was asleep.
 
 **The new receiver email or password did not apply.** Those are stored by the seed, so reset the demo.

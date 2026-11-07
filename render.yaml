@@ -7,7 +7,7 @@ services:
     plan: free
     # Same region as the Neon database (ap-southeast-1). Cannot be changed later.
     region: singapore
-    buildCommand: npm ci && npx prisma migrate deploy && npm run db:seed-on-deploy && npm run build
+    buildCommand: npm ci --include=dev && npx prisma migrate deploy && npm run db:seed-on-deploy && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
