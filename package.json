@@ -8,11 +8,16 @@
     "start": "next start",
     "lint": "eslint",
     "spike": "tsx scripts/spike.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "postinstall": "prisma generate",
+    "db:reset": "prisma migrate deploy && prisma db seed",
+    "receipts:render": "tsx scripts/render-receipts.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.113",
     "@paypal/agent-toolkit": "^1.11.0",
+    "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "ai": "^7.0.164",
     "iron-session": "^9.0.1",
@@ -22,14 +27,16 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^18.0.9",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
     "prisma": "^7.10.1",
+    "puppeteer-core": "^25.16.0",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.1.0"
   }
 }

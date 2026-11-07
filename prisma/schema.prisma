@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../app/generated/prisma"
@@ -10,4 +5,223 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  TREASURER
+  ADMIN
+}
+
+enum DonationStatus {
+  CREATED
+  CAPTURED
+  REFUNDED
+}
+
+enum ClaimState {
+  SUBMITTED
+  VERIFYING
+  APPROVED
+  PAYING
+  PAID
+  REJECTED
+  ESCALATED
+}
+
+enum VerdictCode {
+  APPROVED
+  REJECTED_OVER_BALANCE
+  REJECTED_OUTSIDE_WINDOW
+  REJECTED_DUPLICATE
+  ESCALATED_UNREADABLE_RECEIPT
+  ESCALATED_EXTRACTION_FAILED
+  ESCALATED_LOW_CONFIDENCE
+  ESCALATED_ITEM_MISMATCH
+  ESCALATED_LEDGER_MISMATCH
+  ESCALATED_MODEL_ERROR
+  ESCALATED_PAYPAL_ERROR
+}
+
+enum CheckName {
+  RECEIPT_PARSED
+  WITHIN_BALANCE
+  WITHIN_PROJECT_WINDOW
+  ITEMS_SERVE_PURPOSE
+  NOT_DUPLICATE
+  POOL_CONFIRMED
+}
+
+enum CheckStatus {
+  PENDING
+  PASSED
+  FAILED
+  ERRORED
+}
+
+enum AuditActor {
+  SYSTEM
+  AGENT
+  USER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  // Set for treasurers, null for admins.
+  charityId    String?
+  createdAt    DateTime @default(now())
+
+  charity   Charity?   @relation(fields: [charityId], references: [id])
+  claims    Claim[]
+  auditLogs AuditLog[]
+}
+
+model Charity {
+  id          String   @id @default(cuid())
+  name        String
+  payoutEmail String
+  createdAt   DateTime @default(now())
+
+  users    User[]
+  projects Project[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  charityId String
+  title     String
+  purpose   String
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  goalMinor Int
+  currency  String
+  createdAt DateTime @default(now())
+
+  charity   Charity    @relation(fields: [charityId], references: [id])
+  donations Donation[]
+  claims    Claim[]
+
+  @@index([charityId])
+}
+
+model Donation {
+  id              String         @id @default(cuid())
+  projectId       String
+  paypalOrderId   String         @unique
+  paypalCaptureId String?        @unique
+  amountMinor     Int
+  currency        String
+  status          DonationStatus @default(CREATED)
+  donorName       String?
+  capturedAt      DateTime?
+  createdAt       DateTime       @default(now())
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, status])
+}
+
+model Claim {
+  id            String       @id @default(cuid())
+  projectId     String
+  submittedById String
+  state         ClaimState   @default(SUBMITTED)
+  // Null until the receipt is read. An unreadable receipt may never get one.
+  amountMinor   Int?
+  currency      String
+  verdictCode   VerdictCode?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  project          Project           @relation(fields: [projectId], references: [id])
+  submittedBy      User              @relation(fields: [submittedById], references: [id])
+  receipt          Receipt?
+  verificationRuns VerificationRun[]
+  payout           Payout?
+  auditLogs        AuditLog[]
+
+  @@index([projectId, state])
+}
+
+model Receipt {
+  id        String   @id @default(cuid())
+  claimId   String   @unique
+  imageData Bytes
+  mimeType  String
+  // Not unique: a duplicate upload has to be stored so it can be rejected.
+  sha256    String
+  // Verifier output: vendor, date, lineItems, totalMinor, currency, confidence.
+  extracted Json?
+  createdAt DateTime @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id])
+
+  @@index([sha256])
+}
+
+model VerificationRun {
+  id          String       @id @default(cuid())
+  claimId     String
+  verdictCode VerdictCode?
+  startedAt   DateTime     @default(now())
+  finishedAt  DateTime?
+
+  claim  Claim               @relation(fields: [claimId], references: [id])
+  checks VerificationCheck[]
+
+  @@index([claimId])
+}
+
+model VerificationCheck {
+  id          String      @id @default(cuid())
+  runId       String
+  name        CheckName
+  status      CheckStatus @default(PENDING)
+  evidence    Json?
+  completedAt DateTime?
+
+  run VerificationRun @relation(fields: [runId], references: [id])
+
+  @@unique([runId, name])
+}
+
+model Payout {
+  id            String   @id @default(cuid())
+  // One payout per claim, and a batch id derived from the claim id (rule 3).
+  claimId       String   @unique
+  senderBatchId String   @unique
+  paypalBatchId String?  @unique
+  paypalItemId  String?  @unique
+  receiverEmail String
+  amountMinor   Int
+  currency      String
+  // Kept as PayPal's strings so a status we have not seen cannot break a write.
+  // A claim is only PAID on item status SUCCESS, never on batch status.
+  batchStatus   String?
+  itemStatus    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  claim Claim @relation(fields: [claimId], references: [id])
+}
+
+// Append-only. A database trigger rejects UPDATE and DELETE (see migrations).
+model AuditLog {
+  id          String       @id @default(cuid())
+  claimId     String
+  actor       AuditActor
+  actorUserId String?
+  fromState   ClaimState?
+  toState     ClaimState
+  verdictCode VerdictCode?
+  note        String?
+  createdAt   DateTime     @default(now())
+
+  claim     Claim @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: NoAction)
+
+  @@index([claimId, createdAt])
 }
