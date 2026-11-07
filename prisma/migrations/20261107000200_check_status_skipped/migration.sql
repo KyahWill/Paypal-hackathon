@@ -1,0 +1,1 @@
+ALTER TYPE "CheckStatus" ADD VALUE 'SKIPPED';
