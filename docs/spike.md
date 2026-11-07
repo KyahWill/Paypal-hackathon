@@ -2,15 +2,17 @@
 
 Date: 2026-11-07. Reproduce with `npm run spike` (or `npm run spike -- toolkit|payout|vision`).
 
-**Status: incomplete.** No PayPal or Gemini credentials were available, so only the offline work ran. Nothing below has been tested against a live API yet.
+**Status: incomplete.** Live run on 2026-11-07 with `CURRENCY=PHP` and `GEMINI_MODEL=gemini-3.5-flash-lite`. Both remaining blockers are account setup, not code. A delivered payout and a Gemini response are still unproven.
 
-| Step | Status |
+| Step | Result |
 | --- | --- |
-| a. Toolkit tool listing | Ran (offline, placeholder credentials) |
-| a2. Toolkit tools under `ai@7` | Ran (offline, mock model) |
-| a3. Live `list_transactions` read | **Not run**, needs PayPal credentials |
-| b. OAuth + sandbox payout | **Not run**, needs PayPal credentials |
-| c. Gemini vision + `generateObject` | **Not run**, needs Gemini key and `GEMINI_MODEL` |
+| a. Toolkit tool listing | Done: 47 tools, no payout tool |
+| a2. Toolkit tools under `ai@7` | Broken directly, works wrapped (mock model) |
+| a3. Live `list_transactions` read | Pass: returned 1 transaction |
+| b. OAuth | Pass: payouts scope present |
+| b. PHP payout | **Accepted, not delivered**: item `UNCLAIMED`, receiver is not a sandbox account |
+| b. USD retry | **Rejected**: 422 `INSUFFICIENT_FUNDS`, sender has 0.00 USD |
+| c. Gemini vision + `generateObject` | **Blocked**: 403 `API_KEY_SERVICE_BLOCKED`, no model response |
 
 ## Versions
 
@@ -50,27 +52,54 @@ The toolkit is built against `ai@4`, so npm installs a nested copy and its tools
 tool({ description: t.description, inputSchema: t.parameters, execute: (input) => t.execute(input) })
 ```
 
-This was proven against a mock model only. The wrapper's `execute` has not been run against PayPal, and real tool calling has not been run through Gemini.
+The schema fix was proven against a mock model only. The toolkit's `execute` works live against sandbox when called directly (`list_transactions`), but a real tool call from Gemini through the wrapper has not been run.
 
 The two alternatives are pinning the whole app to `ai@4`, or skipping the toolkit and calling Orders directly. The wrapper is the recommendation, but the toolkit is a hackathon requirement question for the project owner to confirm, not one this spike can settle.
 
 ## b. Sandbox payout
 
-Not run. The script is ready and:
+One payout was sent: batch `3GHGERDC6XFY4`, PHP 1.00. The USD attempt was refused before anything was created.
 
-- only ever talks to `api-m.sandbox.paypal.com` (hardcoded)
-- reports the OAuth scope check, so a missing Payouts feature is obvious
-- judges success by the item status, because a batch can be `SUCCESS` while its item is `UNCLAIMED` or `FAILED`
-- retries in USD only on a definite failure, not on a poll timeout, because a timed-out payout may still land
-- sends a fresh payout on every run of the `payout` step
+**PHP is accepted but delivery is unproven.** PayPal took the batch with HTTP 201 and processed it in about 30 seconds:
 
-Questions this must answer: does PHP work as a sandbox payout currency, what status does the item reach, and how long does settlement take.
+```
+t+6s   batch=PENDING     item=PENDING
+t+12s  batch=PROCESSING  item=PENDING
+t+18s  batch=PROCESSING  item=UNCLAIMED
+t+30s  batch=SUCCESS     item=UNCLAIMED
+```
+
+The item failed with `RECEIVER_UNREGISTERED`. `PAYPAL_CHARITY_RECEIVER_EMAIL` is a gmail.com address, and sandbox payouts only reach sandbox accounts. This says nothing against PHP. The funds return after 30 days if unclaimed.
+
+**The USD failure is not a currency result.** The sender's sandbox balances are PHP 5,000.00 and USD 0.00, so PayPal answered `INSUFFICIENT_FUNDS`. USD remains untested. It only matters if PHP fails against a real sandbox receiver.
+
+Effects on the design:
+
+- **`batch_status` must not be used to mark a claim paid.** This batch reached `SUCCESS` while no money was delivered. `PAID` must require item `transaction_status` of `SUCCESS`.
+- **`UNCLAIMED` needs a home in the claim lifecycle.** CLAUDE.md only has "PAYING -> ESCALATED (payout failed)". Treating `UNCLAIMED` as failed fits that path, but the money stays out of the sender's hands until it is returned, so a retry could double spend the pool. Needs a decision before `executeReimbursement`.
+- **Payouts have a fee.** PHP 0.02 on PHP 1.00, charged to the sender on top of the amount. Verifier check 2 ignores this, so a claim for the full balance could leave the pool short. Only one data point, so the fee formula is unknown.
+- **Settlement is quick enough to show live** in the demo, at about 30 seconds in this one run.
+
+The sender's balance still read PHP 5,000.00 after this payout. Unexplained: it may be reporting lag, or how sandbox treats an unclaimed payout. Do not rely on `/v1/reporting/balances` being instantly current.
+
+The script only talks to `api-m.sandbox.paypal.com` (hardcoded), and sends a fresh payout on every run of the `payout` step.
 
 ## c. Gemini vision
 
-Not run. The script reads `scripts/fixtures/test-receipt.png`, a generated receipt with known values (Maligaya Dry Goods, 2026-10-14, 3 items, PHP 4,450.00), and checks each extracted field against them.
+**Not proven.** Google refused the request before reaching any model, so this tells us nothing about vision or structured output.
 
-`generateObject` still exists in `ai@7` but is marked `@deprecated`: "Use `generateText` with an `output` setting instead." The spike uses `generateObject` as requested. New code in Phase 1 should probably use the replacement. Not yet tested with Gemini.
+```
+403 PERMISSION_DENIED, reason API_KEY_SERVICE_BLOCKED
+```
+
+`ListModels` gets the same 403, so this is the key and not the model name. The API key's restrictions block `generativelanguage.googleapis.com`. Whether `gemini-3.5-flash-lite` exists is also still unknown.
+
+The script reads `scripts/fixtures/test-receipt.png`, a generated receipt with known values (Maligaya Dry Goods, 2026-10-14, 3 items, PHP 4,450.00), and checks each extracted field against them.
+
+The SDK printed two deprecation warnings at runtime, both for code the spike uses as requested. New code in Phase 1 should probably use the replacements:
+
+- `generateObject`: use `generateText` with an `output` setting
+- `"image"` content part: use a `"file"` part with an image `mediaType`
 
 ## Other things found
 
@@ -81,7 +110,12 @@ Not run. The script reads `scripts/fixtures/test-receipt.png`, a generated recei
 - **`npm audit`** reports 12 production vulnerabilities (11 high). The ones shown come through the toolkit's dependency tree (old `openai`, `zod` range). Not fixed, because `npm audit fix --force` could break the toolkit. Reassess before deploying.
 - **The Google provider needs `GOOGLE_GENERATIVE_AI_API_KEY`**, not `GEMINI_API_KEY`.
 
-## Unverified, check when credentials arrive
+## To finish the spike
+
+1. Set `PAYPAL_CHARITY_RECEIVER_EMAIL` to a sandbox Personal account (developer.paypal.com > Testing Tools > Sandbox Accounts). Then run `npm run spike -- payout`.
+2. Remove the API restriction on the Gemini key, or create a new key in Google AI Studio. Then run `npm run spike -- vision`.
+
+## Still unverified
 
 - From memory, not tested: PayPal's Transaction Search data can lag by up to a few hours. If so, `list_transactions` could miss a fresh donation and wrongly trigger `ESCALATED_LEDGER_MISMATCH`, and `get_order` is the better tool for verifier check 6.
 - Rule 3 assumes PayPal rejects a repeated `sender_batch_id`. Not tested here, because it means deliberately attempting a second payout.
