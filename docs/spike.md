@@ -2,7 +2,7 @@
 
 Date: 2026-11-07. Reproduce with `npm run spike` (or `npm run spike -- toolkit|payout|vision`).
 
-**Status: incomplete.** Live run on 2026-11-07 with `CURRENCY=PHP` and `GEMINI_MODEL=gemini-3.5-flash-lite`. Both remaining blockers are account setup, not code. A delivered payout and a Gemini response are still unproven.
+**Status: incomplete.** Live run on 2026-11-07 with `CURRENCY=PHP` and `GEMINI_MODEL=gemini-3.5-flash-lite`. A delivered payout and a Gemini response are still unproven. Since that run, `PAYPAL_CHARITY_RECEIVER_EMAIL` has been changed away from the gmail address, so the payout step is ready to re-run. The Gemini key still returned `API_KEY_SERVICE_BLOCKED` when re-checked the same day.
 
 | Step | Result |
 | --- | --- |
@@ -76,7 +76,7 @@ The item failed with `RECEIVER_UNREGISTERED`. `PAYPAL_CHARITY_RECEIVER_EMAIL` is
 Effects on the design:
 
 - **`batch_status` must not be used to mark a claim paid.** This batch reached `SUCCESS` while no money was delivered. `PAID` must require item `transaction_status` of `SUCCESS`.
-- **`UNCLAIMED` needs a home in the claim lifecycle.** CLAUDE.md only has "PAYING -> ESCALATED (payout failed)". Treating `UNCLAIMED` as failed fits that path, but the money stays out of the sender's hands until it is returned, so a retry could double spend the pool. Needs a decision before `executeReimbursement`.
+- **`UNCLAIMED` must stay reserved.** CLAUDE.md only has "PAYING -> ESCALATED (payout failed)". Treating `UNCLAIMED` as failed fits that path, but the money stays out of the sender's hands until it is returned, so a retry could double spend the pool. `lib/ledger.ts` now keeps an escalated claim's amount reserved unless its item is `FAILED`, `RETURNED`, `REFUNDED` or `REVERSED`. How such a claim is resolved is still to be decided in `executeReimbursement`.
 - **Payouts have a fee.** PHP 0.02 on PHP 1.00, charged to the sender on top of the amount. Verifier check 2 ignores this, so a claim for the full balance could leave the pool short. Only one data point, so the fee formula is unknown.
 - **Settlement is quick enough to show live** in the demo, at about 30 seconds in this one run.
 
@@ -112,12 +112,14 @@ The SDK printed two deprecation warnings at runtime, both for code the spike use
 
 ## To finish the spike
 
-1. Set `PAYPAL_CHARITY_RECEIVER_EMAIL` to a sandbox Personal account (developer.paypal.com > Testing Tools > Sandbox Accounts). Then run `npm run spike -- payout`.
+1. With `PAYPAL_CHARITY_RECEIVER_EMAIL` on a sandbox Personal account, run `npm run spike -- payout`.
 2. Remove the API restriction on the Gemini key, or create a new key in Google AI Studio. Then run `npm run spike -- vision`.
 
 ## Sandbox donation captures
 
 Card-funded orders with no buyer step do not work on this account: `POST /v2/checkout/orders` with `payment_source.card` and test card 4111 1111 1111 1111 returned 422 `PAYER_CANNOT_PAY` (PHP 1.00, nothing created). Cause not established. Seeded donations therefore use the normal buyer approval flow through `npm run donations:capture`.
+
+All 8 seeded orders were read back as `COMPLETED` for PHP 24,250.00. PayPal kept PHP 944.50 in fees, which fits 3.4% + PHP 15 per capture. `/v1/reporting/balances` still read PHP 5,000.00 afterwards, which adds to the unexplained balance behaviour above.
 
 ## Still unverified
 
