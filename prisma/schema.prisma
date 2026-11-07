@@ -93,7 +93,10 @@ model Charity {
 model Project {
   id        String   @id @default(cuid())
   charityId String
+  // Public address of the donation page: /p/[slug].
+  slug      String   @unique
   title     String
+  story     String
   purpose   String
   startDate DateTime @db.Date
   endDate   DateTime @db.Date

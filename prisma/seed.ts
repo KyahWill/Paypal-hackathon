@@ -63,7 +63,9 @@ async function main() {
   const project = await prisma.project.create({
     data: {
       charityId: charity.id,
+      slug: PROJECT.slug,
       title: PROJECT.title,
+      story: PROJECT.story,
       purpose: PROJECT.purpose,
       startDate: at(PROJECT.startDate),
       endDate: at(PROJECT.endDate),

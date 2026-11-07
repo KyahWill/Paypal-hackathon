@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { ClaimState } from "@/app/generated/prisma/enums";
 import { createClaim, transitionClaim } from "@/lib/claims";
@@ -14,6 +15,8 @@ beforeEach(async () => {
   const project = await prisma.project.create({
     data: {
       charityId: charity.id,
+      slug: randomUUID(),
+      story: "Testing",
       title: "T",
       purpose: "P",
       startDate: new Date("2026-01-01"),

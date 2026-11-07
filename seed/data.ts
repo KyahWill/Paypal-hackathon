@@ -4,7 +4,10 @@
 export const CHARITY = { name: "Samahang Kabataan ng Bagong Tanaw" };
 
 export const PROJECT = {
+  slug: "balik-eskwela",
   title: "Balik-Eskwela para sa Bagong Tanaw Elementary School",
+  story:
+    "Every June, some pupils at Bagong Tanaw Elementary School start the year with one shared notebook between three classmates. Their teachers quietly buy what they can, but it never stretches far enough.\n\nWe are a small youth org from the barangay, and most of us went to this school. Our treasurer buys the supplies first, then every peso is reimbursed from this fund against a real receipt, so you can trust that your gift became a notebook, a box of crayons or a bag for a child who needs one.",
   purpose:
     "School supplies for pupils of Bagong Tanaw Elementary School, a public school in Barangay Bagong Tanaw, San Alipio: notebooks, paper, pencils, pens, crayons, bags and basic classroom materials.",
   startDate: "2026-08-01",
