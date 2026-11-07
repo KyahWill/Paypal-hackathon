@@ -13,7 +13,7 @@ import {
   type ReceiptReading,
 } from "@/lib/verifier/reading";
 
-const MODEL_TIMEOUT_MS = 60_000;
+export const MODEL_TIMEOUT_MS = 60_000;
 const RETRY_DELAY_MS = 1_000;
 
 // Exactly two attempts. Callers set maxRetries: 0, or the SDK's own retries

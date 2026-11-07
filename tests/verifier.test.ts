@@ -6,6 +6,8 @@ import { createClaim } from "@/lib/claims";
 import { prisma } from "@/lib/db";
 import { truncateAllTables } from "@/lib/db-reset";
 import { getAvailableBalance } from "@/lib/ledger";
+import type { OrderConfirmation } from "@/lib/paypal/orders";
+import { ModelCallError, type PoolConfirmation } from "@/lib/verifier/pool-agent";
 import type { ExtractedReceipt } from "@/lib/verifier/reading";
 import { verifyClaim, type VerifierDeps } from "@/lib/verifier/verify-claim";
 import {
@@ -37,6 +39,15 @@ const reading = (source: ReceiptData, overrides: Partial<ExtractedReceipt> = {})
   },
 });
 
+const poolResult = (
+  donations: { id: string }[],
+  confirmation: OrderConfirmation,
+): PoolConfirmation => ({
+  results: donations.map((donation) => ({ donationId: donation.id, confirmation })),
+  agentLookups: donations.length,
+  codeLookups: 0,
+});
+
 function fakeDeps(overrides: Partial<VerifierDeps> = {}) {
   return {
     readReceipt: vi.fn<VerifierDeps["readReceipt"]>(async () => reading(RECEIPTS.clean)),
@@ -44,7 +55,9 @@ function fakeDeps(overrides: Partial<VerifierDeps> = {}) {
       score: 0.95,
       rationale: "School supplies for pupils.",
     })),
-    confirmDonation: vi.fn<VerifierDeps["confirmDonation"]>(async () => ({ confirmed: true })),
+    confirmPool: vi.fn<VerifierDeps["confirmPool"]>(async (donations) =>
+      poolResult(donations, { confirmed: true }),
+    ),
     ...overrides,
   };
 }
@@ -140,7 +153,8 @@ describe("the four demo receipts", () => {
     expect(row.state).toBe(ClaimState.APPROVED);
     expect(row.amountMinor).toBe(receiptTotalMinor(RECEIPTS.clean));
     expect(Object.values(await checksOf(claim.id))).toEqual(Array(6).fill("PASSED"));
-    expect(deps.confirmDonation).toHaveBeenCalledTimes(DONATIONS.length);
+    expect(deps.confirmPool).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(deps.confirmPool).mock.calls[0][0]).toHaveLength(DONATIONS.length);
     expect(await prisma.payout.count({ where: { claimId: claim.id } })).toBe(0);
   });
 
@@ -156,7 +170,7 @@ describe("the four demo receipts", () => {
       POOL_CONFIRMED: "SKIPPED",
     });
     expect(deps.assessPurpose).not.toHaveBeenCalled();
-    expect(deps.confirmDonation).not.toHaveBeenCalled();
+    expect(deps.confirmPool).not.toHaveBeenCalled();
     expect((await claimRow(claim.id)).state).toBe(ClaimState.REJECTED);
   });
 
@@ -321,7 +335,10 @@ describe("escalations", () => {
     ],
     [
       "a donation PayPal does not confirm",
-      { confirmDonation: async () => ({ confirmed: false, reason: "Capture is REFUNDED" }) },
+      {
+        confirmPool: async (donations) =>
+          poolResult(donations, { confirmed: false, reason: "Capture is REFUNDED" }),
+      },
       "ESCALATED_LEDGER_MISMATCH",
     ],
     [
@@ -345,11 +362,20 @@ describe("escalations", () => {
     [
       "a PayPal failure",
       {
-        confirmDonation: async () => {
+        confirmPool: async () => {
           throw new Error("key=secret");
         },
       },
       "ESCALATED_PAYPAL_ERROR",
+    ],
+    [
+      "a model failure during the pool check",
+      {
+        confirmPool: async () => {
+          throw new ModelCallError(new Error("key=secret"));
+        },
+      },
+      "ESCALATED_MODEL_ERROR",
     ],
   ];
 

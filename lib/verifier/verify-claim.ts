@@ -10,9 +10,14 @@ import {
 import { transitionClaim } from "@/lib/claims";
 import { prisma } from "@/lib/db";
 import { getAvailableBalance } from "@/lib/ledger";
-import { confirmDonation, type OrderConfirmation } from "@/lib/paypal/orders";
 import { findDuplicateClaimIds } from "@/lib/verifier/duplicates";
 import { assessPurpose, readReceipt, type PurposeAssessment } from "@/lib/verifier/model";
+import {
+  confirmPool,
+  ModelCallError,
+  type PoolConfirmation,
+  type PoolDonation,
+} from "@/lib/verifier/pool-agent";
 import type { ExtractedReceipt, ReceiptReading } from "@/lib/verifier/reading";
 
 export const MIN_CONFIDENCE = 0.7;
@@ -24,18 +29,13 @@ export type VerifierDeps = {
     project: { title: string; purpose: string },
     receipt: ExtractedReceipt,
   ) => Promise<PurposeAssessment>;
-  confirmDonation: (donation: {
-    paypalOrderId: string;
-    paypalCaptureId: string | null;
-    amountMinor: number;
-    currency: string;
-  }) => Promise<OrderConfirmation>;
+  confirmPool: (donations: PoolDonation[]) => Promise<PoolConfirmation>;
 };
 
 const realDeps: VerifierDeps = {
   readReceipt: (image, mimeType) => readReceipt(image, mimeType),
   assessPurpose: (project, receipt) => assessPurpose(project, receipt),
-  confirmDonation,
+  confirmPool: (donations) => confirmPool(donations),
 };
 
 type Evidence = Prisma.InputJsonValue;
@@ -258,22 +258,28 @@ export async function verifyClaim(
         currency: true,
       },
     });
-    let confirmations: OrderConfirmation[];
+    let pool: PoolConfirmation;
     try {
-      confirmations = await Promise.all(donations.map((d) => deps.confirmDonation(d)));
+      pool = await deps.confirmPool(donations);
     } catch (error) {
       await record(CheckName.POOL_CONFIRMED, CheckStatus.ERRORED, { error: errorName(error) });
+      if (error instanceof ModelCallError) {
+        return finish(VerdictCode.ESCALATED_MODEL_ERROR, "Model could not finish the pool check");
+      }
       return finish(VerdictCode.ESCALATED_PAYPAL_ERROR, "PayPal could not confirm the pool");
     }
-    const mismatches = confirmations.flatMap((confirmation, index) =>
-      confirmation.confirmed
-        ? []
-        : [{ donationId: donations[index].id, reason: confirmation.reason }],
+    const mismatches = pool.results.flatMap(({ donationId, confirmation }) =>
+      confirmation.confirmed ? [] : [{ donationId, reason: confirmation.reason }],
     );
     await record(
       CheckName.POOL_CONFIRMED,
       mismatches.length === 0 ? CheckStatus.PASSED : CheckStatus.FAILED,
-      { confirmedDonations: donations.length - mismatches.length, mismatches },
+      {
+        confirmedDonations: pool.results.length - mismatches.length,
+        mismatches,
+        agentLookups: pool.agentLookups,
+        codeLookups: pool.codeLookups,
+      },
     );
     if (mismatches.length > 0) {
       return finish(VerdictCode.ESCALATED_LEDGER_MISMATCH, "Ledger and PayPal disagree");

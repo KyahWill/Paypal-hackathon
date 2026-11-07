@@ -1,6 +1,6 @@
 import { PayPalAgentToolkit } from "@paypal/agent-toolkit/ai-sdk";
 
-type LedgerDonation = {
+export type LedgerDonation = {
   paypalOrderId: string;
   paypalCaptureId: string | null;
   amountMinor: number;
@@ -54,7 +54,19 @@ export function compareOrder(rawOrder: string, donation: LedgerDonation): OrderC
   return { confirmed: true };
 }
 
-export async function confirmDonation(donation: LedgerDonation): Promise<OrderConfirmation> {
-  const raw = await getOrderTool().execute({ id: donation.paypalOrderId }, {});
-  return compareOrder(raw, donation);
+// What a model may see of an order. PayPal's reply holds payer names and emails,
+// which must not leave for the model provider.
+export function summariseOrder(rawOrder: string) {
+  const order = JSON.parse(rawOrder) as Order;
+  if (order.ok === false) return { ok: false, status: order.status };
+  return {
+    status: order.status,
+    captures: (order.purchase_units ?? [])
+      .flatMap((unit) => unit.payments?.captures ?? [])
+      .map(({ id, status, amount }) => ({ id, status, amount })),
+  };
+}
+
+export async function fetchOrder(orderId: string): Promise<string> {
+  return getOrderTool().execute({ id: orderId }, {});
 }
