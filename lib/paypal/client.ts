@@ -19,6 +19,13 @@ export class PayPalError extends Error {
   }
 }
 
+// For logs. Only our own PayPalError message is known to be free of secrets, so
+// anything else is reduced to its name, as in the health route.
+export function describeError(error: unknown): string {
+  if (error instanceof PayPalError) return error.message;
+  return error instanceof Error ? error.name : "unknown";
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is not set`);
