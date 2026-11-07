@@ -41,8 +41,8 @@ function fakeDeps(overrides: Partial<VerifierDeps> = {}) {
   return {
     readReceipt: vi.fn<VerifierDeps["readReceipt"]>(async () => reading(RECEIPTS.clean)),
     assessPurpose: vi.fn<VerifierDeps["assessPurpose"]>(async () => ({
-      serves: true,
-      reason: "School supplies for pupils.",
+      score: 0.95,
+      rationale: "School supplies for pupils.",
     })),
     confirmDonation: vi.fn<VerifierDeps["confirmDonation"]>(async () => ({ confirmed: true })),
     ...overrides,
@@ -276,7 +276,7 @@ describe("the balance", () => {
           arrived += 1;
           if (arrived === 2) release();
           await bothArrived;
-          return { serves: true, reason: "School supplies." };
+          return { score: 0.9, rationale: "School supplies." };
         },
       });
     const [first, second] = [await newClaim(), await newClaim()];
@@ -306,7 +306,7 @@ describe("escalations", () => {
     ],
     [
       "low confidence",
-      { readReceipt: async () => reading(RECEIPTS.clean, { confidence: 0.79 }) },
+      { readReceipt: async () => reading(RECEIPTS.clean, { confidence: 0.69 }) },
       "ESCALATED_LOW_CONFIDENCE",
     ],
     [
@@ -316,7 +316,7 @@ describe("escalations", () => {
     ],
     [
       "items that do not serve the project",
-      { assessPurpose: async () => ({ serves: false, reason: "Karaoke machine." }) },
+      { assessPurpose: async () => ({ score: 0.69, rationale: "Karaoke machine." }) },
       "ESCALATED_ITEM_MISMATCH",
     ],
     [
@@ -361,8 +361,24 @@ describe("escalations", () => {
 
   it("accepts a confidence exactly at the limit", async () => {
     const claim = await newClaim();
-    const deps = fakeDeps({ readReceipt: async () => reading(RECEIPTS.clean, { confidence: 0.8 }) });
+    const deps = fakeDeps({ readReceipt: async () => reading(RECEIPTS.clean, { confidence: 0.7 }) });
     expect(await verifyClaim(claim.id, deps)).toBe("APPROVED");
+  });
+
+  it("accepts a purpose score exactly at the limit, and keeps its evidence", async () => {
+    const claim = await newClaim();
+    const deps = fakeDeps({
+      assessPurpose: async () => ({ score: 0.7, rationale: "Mostly school supplies." }),
+    });
+    expect(await verifyClaim(claim.id, deps)).toBe("APPROVED");
+    const { evidence } = await prisma.verificationCheck.findFirstOrThrow({
+      where: { name: "ITEMS_SERVE_PURPOSE", run: { claimId: claim.id } },
+    });
+    expect(evidence).toEqual({
+      score: 0.7,
+      rationale: "Mostly school supplies.",
+      threshold: 0.7,
+    });
   });
 
   it("keeps provider error messages out of the evidence and audit log", async () => {

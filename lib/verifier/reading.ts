@@ -3,7 +3,7 @@ import { z } from "zod";
 // What the model is asked for. It copies amounts as printed, in major units,
 // and readReceipt converts them, so the model never does arithmetic on money.
 export const ReceiptReadingSchema = z.object({
-  readable: z.boolean().describe("False if the text cannot be read reliably"),
+  unreadable: z.boolean().describe("True if the text cannot be read reliably"),
   vendor: z.string().nullable(),
   date: z.string().nullable().describe("Purchase date as YYYY-MM-DD"),
   lineItems: z.array(
@@ -51,7 +51,7 @@ function isRealDate(date: string) {
 // The schema only proves the shape. This proves the values can be trusted to
 // reach the deterministic checks.
 export function normaliseReading(raw: RawReceiptReading): ReceiptReading {
-  if (!raw.readable) return { outcome: "unreadable" };
+  if (raw.unreadable) return { outcome: "unreadable" };
 
   const { vendor, date, total, currency, confidence, lineItems } = raw;
   if (!vendor?.trim() || !date || total === null || !currency) {

@@ -15,7 +15,8 @@ import { findDuplicateClaimIds } from "@/lib/verifier/duplicates";
 import { assessPurpose, readReceipt, type PurposeAssessment } from "@/lib/verifier/model";
 import type { ExtractedReceipt, ReceiptReading } from "@/lib/verifier/reading";
 
-export const MIN_CONFIDENCE = 0.8;
+export const MIN_CONFIDENCE = 0.7;
+export const MIN_PURPOSE_SCORE = 0.7;
 
 export type VerifierDeps = {
   readReceipt: (image: Uint8Array, mimeType: string) => Promise<ReceiptReading>;
@@ -146,7 +147,7 @@ export async function verifyClaim(
       return finish(VerdictCode.ESCALATED_MODEL_ERROR, "Model could not read the receipt");
     }
     if (reading.outcome === "unreadable") {
-      await record(CheckName.RECEIPT_PARSED, CheckStatus.FAILED, { readable: false });
+      await record(CheckName.RECEIPT_PARSED, CheckStatus.FAILED, { unreadable: true });
       return finish(VerdictCode.ESCALATED_UNREADABLE_RECEIPT, "Receipt could not be read");
     }
     if (reading.outcome === "failed") {
@@ -236,13 +237,14 @@ export async function verifyClaim(
       await record(CheckName.ITEMS_SERVE_PURPOSE, CheckStatus.ERRORED, { error: errorName(error) });
       return finish(VerdictCode.ESCALATED_MODEL_ERROR, "Model could not assess the items");
     }
+    const servesPurpose = purpose.score >= MIN_PURPOSE_SCORE;
     await record(
       CheckName.ITEMS_SERVE_PURPOSE,
-      purpose.serves ? CheckStatus.PASSED : CheckStatus.FAILED,
-      { reason: purpose.reason },
+      servesPurpose ? CheckStatus.PASSED : CheckStatus.FAILED,
+      { score: purpose.score, rationale: purpose.rationale, threshold: MIN_PURPOSE_SCORE },
     );
-    if (!purpose.serves) {
-      return finish(VerdictCode.ESCALATED_ITEM_MISMATCH, purpose.reason);
+    if (!servesPurpose) {
+      return finish(VerdictCode.ESCALATED_ITEM_MISMATCH, purpose.rationale);
     }
 
     // Check 6: every donation in the pool must exist as a completed capture.
