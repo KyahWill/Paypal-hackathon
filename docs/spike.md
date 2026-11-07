@@ -76,7 +76,7 @@ The item failed with `RECEIVER_UNREGISTERED`. `PAYPAL_CHARITY_RECEIVER_EMAIL` is
 Effects on the design:
 
 - **`batch_status` must not be used to mark a claim paid.** This batch reached `SUCCESS` while no money was delivered. `PAID` must require item `transaction_status` of `SUCCESS`.
-- **`UNCLAIMED` needs a home in the claim lifecycle.** CLAUDE.md only has "PAYING -> ESCALATED (payout failed)". Treating `UNCLAIMED` as failed fits that path, but the money stays out of the sender's hands until it is returned, so a retry could double spend the pool. Needs a decision before `executeReimbursement`.
+- **`UNCLAIMED` must stay reserved.** CLAUDE.md only has "PAYING -> ESCALATED (payout failed)". Treating `UNCLAIMED` as failed fits that path, but the money stays out of the sender's hands until it is returned, so a retry could double spend the pool. `lib/ledger.ts` now keeps an escalated claim's amount reserved unless its item is `FAILED`, `RETURNED`, `REFUNDED` or `REVERSED`. How such a claim is resolved is still to be decided in `executeReimbursement`.
 - **Payouts have a fee.** PHP 0.02 on PHP 1.00, charged to the sender on top of the amount. Verifier check 2 ignores this, so a claim for the full balance could leave the pool short. Only one data point, so the fee formula is unknown.
 - **Settlement is quick enough to show live** in the demo, at about 30 seconds in this one run.
 
