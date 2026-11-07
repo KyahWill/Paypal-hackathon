@@ -1,6 +1,6 @@
 # Running the demo
 
-> The chat, verifier and payout flow are not built yet. This is the planned script, and the data for it is ready. Update this page once the flow runs for real.
+> The chat and payout flow are not built yet, and the verifier has not read a receipt with a real model. This is the planned script, and the data for it is ready. Update this page once the flow runs for real.
 
 ## The story
 

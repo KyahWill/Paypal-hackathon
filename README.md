@@ -24,7 +24,8 @@ The model never moves money. Only `executeReimbursement(claimId)` calls Payouts,
 | Render blueprint and health check | Done, first live deploy still to confirm |
 | Donation page | Not built |
 | Login and sessions | Password hashing only |
-| Leslie chat and verifier | Not built |
+| Verifier | Built and tested, real Gemini calls unproven while the key is blocked |
+| Leslie chat | Not built |
 | Payouts client and `executeReimbursement` | Not built |
 | Admin escalation queue | Not built |
 
@@ -63,6 +64,7 @@ Open http://localhost:3032. The health check is at http://localhost:3032/api/hea
 | `npm run db:reset` | **Wipes `DATABASE_URL`**, applies migrations and reseeds |
 | `npm run donations:capture` | Creates real sandbox captures for the seed data |
 | `npm run receipts:render` | Re-renders the demo receipts with local Chrome |
+| `npm run verify:receipt -- clean` | Runs a demo receipt through the verifier, local databases only |
 | `npm run spike` | Re-runs the API checks, and sends a real sandbox payout |
 
 ## Documentation
@@ -72,6 +74,7 @@ Everything else lives in [docs/](docs/README.md):
 - [Local setup](docs/setup.md)
 - [Database, seed and ledger](docs/database.md)
 - [PayPal sandbox](docs/paypal-sandbox.md)
+- [The verifier](docs/verifier.md)
 - [Deploying to Render](docs/deploy.md)
 - [Running the demo](docs/demo.md)
 - [Troubleshooting](docs/troubleshooting.md)

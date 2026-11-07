@@ -5,6 +5,7 @@
 | Run the project on my machine | [setup.md](setup.md) |
 | Understand the data, seed or balance rules | [database.md](database.md) |
 | Set up PayPal, or redo the seeded donations | [paypal-sandbox.md](paypal-sandbox.md) |
+| Understand how a claim gets its verdict | [verifier.md](verifier.md) |
 | Deploy, or reset the deployed demo | [deploy.md](deploy.md) |
 | Prepare and present the demo | [demo.md](demo.md) |
 | Fix something that broke, or rotate a secret | [troubleshooting.md](troubleshooting.md) |

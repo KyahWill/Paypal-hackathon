@@ -53,7 +53,8 @@ Settlement took about 30 seconds in the one run measured.
 - Never use `ALL_TOOLS_ENABLED` in app code. It exposes tools that move money, such as `create_refund` and `pay_order`.
 - Enable exactly `{ orders: { get: true }, transactions: { list: true } }`.
 - Wrap each tool in `ai@7`'s `tool()`, or the model receives empty schemas. [spike.md](spike.md) has the code.
-- Prefer `get_order` for verifier check 6. Transaction Search may lag behind fresh donations, though that has not been measured.
+- Verifier check 6 uses `get_order`, see [verifier.md](verifier.md). Transaction Search may lag behind fresh donations, though that has not been measured.
+- Tools return JSON text, and report failures as `{ "ok": false }` without throwing.
 
 ## Current sandbox state
 

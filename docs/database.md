@@ -11,7 +11,7 @@
 | `Claim` | State, amount, verdict code |
 | `Receipt` | Image bytes, sha256, extracted JSON. One per claim |
 | `VerificationRun` | One verifier pass over a claim |
-| `VerificationCheck` | One row per check with its evidence, so the UI can show progress live |
+| `VerificationCheck` | One row per check with its evidence and status, so the UI can show progress live |
 | `Payout` | Batch id, item id, status. One per claim |
 | `AuditLog` | Claim state history. Append-only |
 

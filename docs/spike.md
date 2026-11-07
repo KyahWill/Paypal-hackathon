@@ -121,6 +121,10 @@ Card-funded orders with no buyer step do not work on this account: `POST /v2/che
 
 All 8 seeded orders were read back as `COMPLETED` for PHP 24,250.00. PayPal kept PHP 944.50 in fees, which fits 3.4% + PHP 15 per capture. `/v1/reporting/balances` still read PHP 5,000.00 afterwards, which adds to the unexplained balance behaviour above.
 
+## `get_order` through the toolkit
+
+Called directly through the toolkit with only `orders.get` enabled, it confirmed all 8 seeded orders live. It returns JSON text, not an object. A missing order does not throw: it returns `{"ok":false,"status":404,"code":"PAYPAL_API_HTTP_ERROR"}`. The response includes payer names and emails, so it must not be stored whole.
+
 ## Still unverified
 
 - From memory, not tested: PayPal's Transaction Search data can lag by up to a few hours. If so, `list_transactions` could miss a fresh donation and wrongly trigger `ESCALATED_LEDGER_MISMATCH`, and `get_order` is the better tool for verifier check 6.
