@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { truncateAllTables } from "@/lib/db-reset";
 import { getAvailableBalance } from "@/lib/ledger";
 import type { OrderConfirmation } from "@/lib/paypal/orders";
+import type { VerifierEvent } from "@/lib/verifier/events";
 import { ModelCallError, type PoolConfirmation } from "@/lib/verifier/pool-agent";
 import type { ExtractedReceipt } from "@/lib/verifier/reading";
 import { verifyClaim, type VerifierDeps } from "@/lib/verifier/verify-claim";
@@ -420,6 +421,119 @@ describe("escalations", () => {
     const checks = await prisma.verificationCheck.findMany({ where: { run: { claimId: claim.id } } });
     const audit = await prisma.auditLog.findMany({ where: { claimId: claim.id } });
     expect(JSON.stringify([checks, audit])).not.toContain("secret");
+  });
+});
+
+describe("progress events", () => {
+  const collect = () => {
+    const events: VerifierEvent[] = [];
+    return { events, listen: (event: VerifierEvent) => void events.push(event) };
+  };
+  const summary = (event: VerifierEvent) => {
+    if (event.type === "check_started") return `start ${event.name}`;
+    if (event.type === "check_finished") return `${event.status} ${event.name}`;
+    if (event.type === "verdict") return `${event.code} ${event.state}`;
+    return event.type;
+  };
+
+  it("reports every check of an approved claim in order", async () => {
+    const claim = await newClaim();
+    const { events, listen } = collect();
+
+    await verifyClaim(claim.id, fakeDeps(), listen);
+
+    const checks = [
+      "RECEIPT_PARSED",
+      "WITHIN_PROJECT_WINDOW",
+      "WITHIN_BALANCE",
+      "NOT_DUPLICATE",
+      "ITEMS_SERVE_PURPOSE",
+      "POOL_CONFIRMED",
+    ];
+    expect(events.map(summary)).toEqual([
+      "run_started",
+      ...checks.flatMap((name) => [`start ${name}`, `PASSED ${name}`]),
+      "APPROVED APPROVED",
+    ]);
+    expect(events[0]).toMatchObject({ checks });
+  });
+
+  it("reports the checks that never ran as skipped", async () => {
+    const claim = await newClaim();
+    const { events, listen } = collect();
+    const deps = fakeDeps({ readReceipt: async () => ({ outcome: "unreadable" }) });
+
+    await verifyClaim(claim.id, deps, listen);
+
+    expect(events.map(summary)).toEqual([
+      "run_started",
+      "start RECEIPT_PARSED",
+      "FAILED RECEIPT_PARSED",
+      "SKIPPED WITHIN_PROJECT_WINDOW",
+      "SKIPPED WITHIN_BALANCE",
+      "SKIPPED NOT_DUPLICATE",
+      "SKIPPED ITEMS_SERVE_PURPOSE",
+      "SKIPPED POOL_CONFIRMED",
+      "ESCALATED_UNREADABLE_RECEIPT ESCALATED",
+    ]);
+  });
+
+  it("carries the same evidence as the stored check", async () => {
+    const claim = await newClaim();
+    const { events, listen } = collect();
+    await verifyClaim(claim.id, fakeDeps(), listen);
+
+    const rows = await prisma.verificationCheck.findMany({ where: { run: { claimId: claim.id } } });
+    for (const row of rows) {
+      const event = events.find((e) => e.type === "check_finished" && e.name === row.name);
+      expect(event).toMatchObject({ status: row.status, evidence: row.evidence });
+    }
+  });
+
+  it("has already saved the verdict when it is announced", async () => {
+    const claim = await newClaim();
+    let stateAtVerdict: Promise<unknown> | undefined;
+    await verifyClaim(claim.id, fakeDeps(), (event) => {
+      if (event.type === "verdict") stateAtVerdict = claimRow(claim.id).then((row) => row.state);
+    });
+    expect(await stateAtVerdict).toBe(ClaimState.APPROVED);
+  });
+
+  it("tells the page when the final balance re-check fails", async () => {
+    const claim = await newClaim();
+    const { events, listen } = collect();
+    const deps = fakeDeps({
+      assessPurpose: async () => {
+        // Money leaves after the early check has passed.
+        await prisma.claim.create({
+          data: { projectId, submittedById: treasurerId, state: "PAID", amountMinor: 1_800_000, currency: "PHP" },
+        });
+        return { score: 0.9, rationale: "School supplies." };
+      },
+    });
+
+    expect(await verifyClaim(claim.id, deps, listen)).toBe("REJECTED_OVER_BALANCE");
+
+    expect(events.map(summary).slice(-2)).toEqual([
+      "FAILED WITHIN_BALANCE",
+      "REJECTED_OVER_BALANCE REJECTED",
+    ]);
+  });
+
+  it.each([
+    [
+      "throws",
+      () => {
+        throw new Error("tab closed");
+      },
+    ],
+    ["rejects", async () => Promise.reject(new Error("tab closed"))],
+  ])("carries on when a listener %s", async (_, listener) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const claim = await newClaim();
+    expect(await verifyClaim(claim.id, fakeDeps(), listener)).toBe("APPROVED");
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    warn.mockRestore();
   });
 });
 

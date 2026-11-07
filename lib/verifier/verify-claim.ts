@@ -1,4 +1,3 @@
-import { Prisma } from "@/app/generated/prisma/client";
 import {
   AuditActor,
   CheckName,
@@ -11,6 +10,12 @@ import { transitionClaim } from "@/lib/claims";
 import { prisma } from "@/lib/db";
 import { getAvailableBalance } from "@/lib/ledger";
 import { findDuplicateClaimIds } from "@/lib/verifier/duplicates";
+import {
+  CHECK_ORDER,
+  safeListener,
+  type Evidence,
+  type ProgressListener,
+} from "@/lib/verifier/events";
 import { assessPurpose, readReceipt, type PurposeAssessment } from "@/lib/verifier/model";
 import {
   confirmPool,
@@ -38,17 +43,18 @@ const realDeps: VerifierDeps = {
   confirmPool: (donations) => confirmPool(donations),
 };
 
-type Evidence = Prisma.InputJsonValue;
-
 const dateOnly = (date: Date) => date.toISOString().slice(0, 10);
 
 // Runs one claim from SUBMITTED to APPROVED, REJECTED or ESCALATED and returns
 // the verdict. It never pays: an APPROVED claim waits for executeReimbursement.
-// Check rows are written as each one finishes, so the UI can show them live.
+// Check rows are written as each one finishes, and onProgress hears about each
+// write, so the UI can show them live.
 export async function verifyClaim(
   claimId: string,
   deps: VerifierDeps = realDeps,
+  onProgress?: ProgressListener,
 ): Promise<VerdictCode> {
+  const emit = safeListener(onProgress);
   const claim = await prisma.claim.findUniqueOrThrow({
     where: { id: claimId },
     include: { project: true, receipt: true },
@@ -66,20 +72,30 @@ export async function verifyClaim(
     const run = await tx.verificationRun.create({
       data: {
         claimId,
-        checks: { create: Object.values(CheckName).map((name) => ({ name })) },
+        checks: { create: CHECK_ORDER.map((name) => ({ name })) },
       },
     });
     return run.id;
   });
+  emit({ type: "run_started", runId, checks: CHECK_ORDER });
 
-  const record = (name: CheckName, status: CheckStatus, evidence: Evidence) =>
-    prisma.verificationCheck.update({
+  const start = (name: CheckName) => emit({ type: "check_started", runId, name });
+
+  const record = async (name: CheckName, status: CheckStatus, evidence: Evidence) => {
+    await prisma.verificationCheck.update({
       where: { runId_name: { runId, name } },
       data: { status, evidence, completedAt: new Date() },
     });
+    emit({ type: "check_finished", runId, name, status, evidence });
+  };
 
   const finish = async (verdictCode: VerdictCode, note: string) => {
-    await prisma.$transaction(async (tx) => {
+    const state = verdictCode.startsWith("REJECTED") ? ClaimState.REJECTED : ClaimState.ESCALATED;
+    const skipped = await prisma.$transaction(async (tx) => {
+      const pending = await tx.verificationCheck.findMany({
+        where: { runId, status: CheckStatus.PENDING },
+        select: { name: true },
+      });
       await tx.verificationCheck.updateMany({
         where: { runId, status: CheckStatus.PENDING },
         data: { status: CheckStatus.SKIPPED },
@@ -91,33 +107,37 @@ export async function verifyClaim(
       await transitionClaim(tx, {
         claimId,
         from: ClaimState.VERIFYING,
-        to: verdictCode.startsWith("REJECTED") ? ClaimState.REJECTED : ClaimState.ESCALATED,
+        to: state,
         actor: AuditActor.AGENT,
         verdictCode,
         note,
       });
+      return pending.map(({ name }) => name);
     });
+    const remaining = CHECK_ORDER.filter((name) => skipped.includes(name));
+    for (const name of remaining) {
+      emit({ type: "check_finished", runId, name, status: CheckStatus.SKIPPED });
+    }
+    emit({ type: "verdict", runId, code: verdictCode, state });
     return verdictCode;
   };
 
   // The earlier balance check can be stale by now. The row lock makes concurrent
   // approvals on one project take turns, so they cannot spend the same money.
   const approve = async (amountMinor: number) => {
-    const approved = await prisma.$transaction(async (tx) => {
+    const overBalance = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Project" WHERE id = ${project.id} FOR UPDATE`;
       const { availableMinor } = await getAvailableBalance(project.id, {
         db: tx,
         excludeClaimId: claimId,
       });
       if (amountMinor > availableMinor) {
+        const evidence = { amountMinor, availableMinor, stage: "final re-check" };
         await tx.verificationCheck.update({
           where: { runId_name: { runId, name: CheckName.WITHIN_BALANCE } },
-          data: {
-            status: CheckStatus.FAILED,
-            evidence: { amountMinor, availableMinor, stage: "final re-check" },
-          },
+          data: { status: CheckStatus.FAILED, evidence },
         });
-        return false;
+        return evidence;
       }
       await tx.verificationRun.update({
         where: { id: runId },
@@ -131,14 +151,25 @@ export async function verifyClaim(
         verdictCode: VerdictCode.APPROVED,
         note: "All checks passed",
       });
-      return true;
+      return null;
     });
-    if (approved) return VerdictCode.APPROVED;
-    return finish(VerdictCode.REJECTED_OVER_BALANCE, "Balance changed during verification");
+    if (overBalance) {
+      emit({
+        type: "check_finished",
+        runId,
+        name: CheckName.WITHIN_BALANCE,
+        status: CheckStatus.FAILED,
+        evidence: overBalance,
+      });
+      return finish(VerdictCode.REJECTED_OVER_BALANCE, "Balance changed during verification");
+    }
+    emit({ type: "verdict", runId, code: VerdictCode.APPROVED, state: ClaimState.APPROVED });
+    return VerdictCode.APPROVED;
   };
 
   const runChecks = async (): Promise<VerdictCode> => {
     // Check 1: read the receipt.
+    start(CheckName.RECEIPT_PARSED);
     let reading: ReceiptReading;
     try {
       reading = await deps.readReceipt(storedReceipt.imageData, storedReceipt.mimeType);
@@ -188,6 +219,7 @@ export async function verifyClaim(
 
     // Checks 2, 3 and 5 need no model, so they all run before spending a model
     // call, and the page shows every problem at once.
+    start(CheckName.WITHIN_PROJECT_WINDOW);
     const startDate = dateOnly(project.startDate);
     const endDate = dateOnly(project.endDate);
     const inWindow = receipt.date >= startDate && receipt.date <= endDate;
@@ -197,6 +229,7 @@ export async function verifyClaim(
       { purchaseDate: receipt.date, startDate, endDate },
     );
 
+    start(CheckName.WITHIN_BALANCE);
     const { availableMinor } = await getAvailableBalance(project.id, {
       excludeClaimId: claimId,
     });
@@ -207,6 +240,7 @@ export async function verifyClaim(
       { amountMinor: receipt.totalMinor, availableMinor },
     );
 
+    start(CheckName.NOT_DUPLICATE);
     const matchingClaims = await findDuplicateClaimIds(
       prisma,
       claimId,
@@ -230,6 +264,7 @@ export async function verifyClaim(
     }
 
     // Check 4: does the purchase serve the project?
+    start(CheckName.ITEMS_SERVE_PURPOSE);
     let purpose: PurposeAssessment;
     try {
       purpose = await deps.assessPurpose(project, receipt);
@@ -248,6 +283,7 @@ export async function verifyClaim(
     }
 
     // Check 6: every donation in the pool must exist as a completed capture.
+    start(CheckName.POOL_CONFIRMED);
     const donations = await prisma.donation.findMany({
       where: { projectId: project.id, status: DonationStatus.CAPTURED },
       select: {
