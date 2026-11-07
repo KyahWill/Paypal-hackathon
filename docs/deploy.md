@@ -26,12 +26,13 @@ These run in the build command because the Free plan has no pre-deploy command, 
    | `DATABASE_URL` | The direct Neon string, not the `-pooler` one. Migrations need it |
    | `APP_URL` | Use a placeholder until Render gives you the URL |
    | `SEED_*` | This site is public, so use strong passwords here |
+   | `PAYPAL_WEBHOOK_ID` | Leave empty for now. You need the Render URL first, see [paypal-sandbox.md](paypal-sandbox.md#setting-up-the-webhook) |
    | `PAYPAL_CHARITY_RECEIVER_EMAIL` | The sandbox Personal account. Set it now, because the seed copies it onto the charity |
    | The rest | Copy from `.env` |
 
    `CURRENCY` and `SESSION_SECRET` are set by the blueprint.
 
-3. Once the first deploy is live, set `APP_URL` to the real URL and redeploy.
+3. Once the first deploy is live, set `APP_URL` to the real URL, register the webhook, set `PAYPAL_WEBHOOK_ID`, and redeploy.
 4. Open `https://<your-service>.onrender.com/api/health`. It returns `{"status":"ok"}` when the app can reach the database, and a 503 when it cannot.
 
 Neon must be empty, or hold only these migrations. Otherwise `prisma migrate deploy` stops with P3005 and changes nothing.

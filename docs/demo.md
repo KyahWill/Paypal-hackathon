@@ -14,7 +14,7 @@ The moment to land: the treasurer uploads a receipt, watches the checks complete
 | --- | --- |
 | Treasurer | `SEED_TREASURER_EMAIL` and `SEED_TREASURER_PASSWORD` |
 | Admin | `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` |
-| Donor | None needed |
+| Donor | None needed. Give at `/p/balik-eskwela` as the sandbox buyer |
 | PayPal receiver | The sandbox Personal account, to show the money arriving |
 
 ## Demo receipts
@@ -39,5 +39,7 @@ No real model has read these images yet, because the Gemini key is blocked. Test
 3. Check `/api/health`.
 4. Log in to the sandbox receiver account in another tab.
 5. Keep a recording ready in case the sandbox is slow. Payouts took about 30 seconds in the one run measured.
+
+Test donations raise the pool. After about PHP 3,900 of them, `over-balance.png` is no longer over the balance, so reset the demo after trying out donations.
 
 Keep an eye on the sandbox sender's balance. Payouts draw from it, and a reset does not refill it.

@@ -37,6 +37,31 @@ Only `COMPLETED` captures count. The script stops on anything else.
 
 Automatic card-funded orders do not work on this account: PayPal answers `422 PAYER_CANNOT_PAY`. That is why a buyer has to approve each one.
 
+## Donations
+
+The page is `/p/<slug>`, and the demo project is at `/p/balik-eskwela`.
+
+1. The browser asks `POST /api/donations/orders` for an order. The amount is checked on the server, and nothing is written to our database.
+2. The donor approves in PayPal's popup.
+3. The browser calls `POST /api/donations/orders/<id>/capture`. A `Donation` row is written only if the capture is `COMPLETED`.
+4. If that response never arrives, for example because the tab was closed, `PAYMENT.CAPTURE.COMPLETED` reaches `POST /api/webhooks/paypal` and records the same donation.
+
+Both paths end in `recordCompletedDonation()` in `lib/donations.ts`, the only code that writes a donation. It can run any number of times for one order. The project and the donor's anonymous choice travel on the order as `custom_id`, because no row exists before the capture. Only the first name is stored.
+
+Donations can be refunded in PayPal, but nothing here listens for that yet. The ledger keeps counting a refunded gift, and verifier check 6 escalates the next claim when it sees the capture is no longer `COMPLETED`.
+
+## Setting up the webhook
+
+PayPal has to reach the URL, so this only works on a deployed site, never on `localhost`.
+
+1. At developer.paypal.com > Apps & Credentials, open the app and choose Add Webhook.
+2. URL: `https://<your-service>.onrender.com/api/webhooks/paypal`. Event: `Payment capture completed`.
+3. Copy the Webhook ID into `PAYPAL_WEBHOOK_ID` in the Render dashboard, and redeploy.
+
+Without that ID, the route refuses every event with a 500, and PayPal keeps retrying for a while.
+
+Signatures are checked by asking PayPal, through `/v1/notifications/verify-webhook-signature`. The dashboard's webhook simulator sends mock events that cannot pass that check, so test with a real donation.
+
 ## Rules for payouts
 
 These come from the live results in [spike.md](spike.md), and `executeReimbursement` must follow them when it is built:

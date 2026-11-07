@@ -6,8 +6,8 @@
 | --- | --- |
 | `User` | Logins. Role is `TREASURER` or `ADMIN`. Donors have no account |
 | `Charity` | Name and payout email |
-| `Project` | Purpose, start and end dates, goal, currency |
-| `Donation` | PayPal order id, capture id, amount, status |
+| `Project` | Slug, story, purpose, start and end dates, goal, currency |
+| `Donation` | PayPal order id, capture id, amount, status, first name. Written only once a capture is `COMPLETED` |
 | `Claim` | State, amount, verdict code |
 | `Receipt` | Image bytes, sha256, extracted JSON. One per claim |
 | `VerificationRun` | One verifier pass over a claim |

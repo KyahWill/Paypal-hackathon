@@ -47,6 +47,7 @@ cp .env.example .env
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | developer.paypal.com > Apps & Credentials, sandbox mode |
 | `NEXT_PUBLIC_PAYPAL_CLIENT_ID` | Same value as `PAYPAL_CLIENT_ID`. This one reaches the browser |
 | `PAYPAL_CHARITY_RECEIVER_EMAIL` | A sandbox Personal account email, not a real address |
+| `PAYPAL_WEBHOOK_ID` | Leave empty locally. Only a deployed site can receive webhooks, see [paypal-sandbox.md](paypal-sandbox.md#setting-up-the-webhook) |
 
 To point a single command at another database without editing `.env`, set the variable inline. It wins over the file:
 
