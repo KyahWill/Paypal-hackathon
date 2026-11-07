@@ -34,6 +34,10 @@ If a ZTNA or company network is blocking it, ask whoever runs it for an exceptio
 | `INSUFFICIENT_FUNDS` | The sender has too little in that currency | Check the balance. Sandbox held PHP only, with USD at 0.00 |
 | `PAYER_CANNOT_PAY` | Card-funded orders are refused on this account | Use `npm run donations:capture` |
 | Batch `SUCCESS` but no money arrived | Batch status is not delivery | Read the item's `transaction_status` |
+| `/api/webhooks/paypal` returns 500 on every event | `PAYPAL_WEBHOOK_ID` is not set, or PayPal could not be reached | A missing ID logs `failed: Error`, and a PayPal failure logs its status. Set the ID in Render |
+| `PayPal webhook refused: signature did not verify` | The ID is for a different webhook, or the event came from the simulator | Check `PAYPAL_WEBHOOK_ID`. Test with a real donation |
+| `has no order id` in the log | The live event differs from what the code expects | Stop and report it, see rule 6 in CLAUDE.md |
+| A donation is missing from the page | Usually the donor never approved | Look the order up, see [Tracing a donation](paypal-sandbox.md#tracing-a-donation) |
 | Balance did not change after a payment | The balance report may lag | Do not rely on it being instantly current |
 
 ## Gemini

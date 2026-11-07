@@ -125,7 +125,28 @@ All 8 seeded orders were read back as `COMPLETED` for PHP 24,250.00. PayPal kept
 
 Called directly through the toolkit with only `orders.get` enabled, it confirmed all 8 seeded orders live. It returns JSON text, not an object. A missing order does not throw: it returns `{"ok":false,"status":404,"code":"PAYPAL_API_HTTP_ERROR"}`. The response includes payer names and emails, so it must not be stored whole.
 
+## Donation flow
+
+Tested on 2026-11-07 from `localhost` with a sandbox buyer, through the real page and JS SDK buttons.
+
+Confirmed live:
+
+- `application_context` with `NO_SHIPPING` is accepted on `POST /v2/checkout/orders`, and the buttons work with it.
+- `custom_id` set on the purchase unit comes back when the order is read.
+- A named gift stored only the buyer's first name. Two anonymous gifts stored no name, although PayPal had one.
+- All three new donations passed `compareOrder`, the comparison behind verifier check 6, on the first try.
+- Calling capture again for a captured order returned the same result, with one row and an unchanged total.
+- An order nobody approves stays `CREATED`, and no row is written.
+
+Not tested live yet:
+
+- The webhook. Its signature check and `resource.supplementary_data.related_ids.order_id` are only proven against a fake PayPal, and that field is from memory. If the real event differs, the webhook logs `has no order id`.
+- A gift with centavos. The live gifts were whole pesos.
+- A declined payment, and a capture that comes back `PENDING`.
+- Which capture response fields hold `custom_id`. The code accepts it on the capture or on the purchase unit.
+
+Transaction Search was over 90 minutes behind during this test: at 06:36Z it was last refreshed at 04:59Z. So it cannot confirm a fresh donation, which backs up using `get_order` for check 6.
+
 ## Still unverified
 
-- From memory, not tested: PayPal's Transaction Search data can lag by up to a few hours. If so, `list_transactions` could miss a fresh donation and wrongly trigger `ESCALATED_LEDGER_MISMATCH`, and `get_order` is the better tool for verifier check 6.
 - Rule 3 assumes PayPal rejects a repeated `sender_batch_id`. Not tested here, because it means deliberately attempting a second payout.

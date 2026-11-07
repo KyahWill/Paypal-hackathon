@@ -22,7 +22,8 @@ The model never moves money. Only `executeReimbursement(claimId)` calls Payouts,
 | Database schema, ledger, audit log | Done |
 | Seed data, demo receipts, real sandbox captures | Done |
 | Render blueprint and health check | Done, first live deploy still to confirm |
-| Donation page, capture and webhook | Done locally, webhook not yet proven live |
+| Donation page and capture | Done, tested locally with a sandbox buyer |
+| Capture webhook | Built and tested with mocks, not yet proven against real PayPal |
 | Login and sessions | Password hashing only |
 | Verifier | Built and tested, real Gemini calls unproven while the key is blocked |
 | Leslie chat | Not built |
