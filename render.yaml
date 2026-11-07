@@ -1,0 +1,41 @@
+# Migrations and the seed run in buildCommand because the Free plan has no
+# pre-deploy command, shell or one-off jobs. See docs/deploy.md.
+services:
+  - type: web
+    name: leslie
+    runtime: node
+    plan: free
+    # Same region as the Neon database (ap-southeast-1). Cannot be changed later.
+    region: singapore
+    buildCommand: npm ci && npx prisma migrate deploy && npm run db:seed-on-deploy && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: CURRENCY
+        value: PHP
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: APP_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SEED_ADMIN_EMAIL
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_TREASURER_EMAIL
+        sync: false
+      - key: SEED_TREASURER_PASSWORD
+        sync: false
+      - key: GOOGLE_GENERATIVE_AI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CHARITY_RECEIVER_EMAIL
+        sync: false

@@ -13,7 +13,8 @@
     "postinstall": "prisma generate",
     "db:reset": "prisma migrate deploy && prisma db seed",
     "receipts:render": "tsx scripts/render-receipts.ts",
-    "donations:capture": "tsx scripts/capture-sandbox-donations.ts"
+    "donations:capture": "tsx scripts/capture-sandbox-donations.ts",
+    "db:seed-on-deploy": "tsx scripts/seed-on-deploy.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.113",
@@ -39,5 +40,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=24 <25"
   }
 }
