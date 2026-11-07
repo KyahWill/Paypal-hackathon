@@ -55,3 +55,6 @@ PAYING -> ESCALATED (payout failed)
 - Run `tsc --noEmit` and tests before declaring a phase done
 - End each phase with a short report: what works, what doesn't, what you assumed
 - User-facing copy: warm, plain English, no em-dashes
+
+## Docs
+Runbooks live in `docs/` (start at `docs/README.md`). API behaviour measured in the spike is in `docs/spike.md`, and payout rules from it are in `docs/paypal-sandbox.md`. Update the relevant doc when a process changes. The repository is public.

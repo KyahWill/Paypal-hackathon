@@ -2,7 +2,7 @@
 
 Date: 2026-11-07. Reproduce with `npm run spike` (or `npm run spike -- toolkit|payout|vision`).
 
-**Status: incomplete.** Live run on 2026-11-07 with `CURRENCY=PHP` and `GEMINI_MODEL=gemini-3.5-flash-lite`. Both remaining blockers are account setup, not code. A delivered payout and a Gemini response are still unproven.
+**Status: incomplete.** Live run on 2026-11-07 with `CURRENCY=PHP` and `GEMINI_MODEL=gemini-3.5-flash-lite`. A delivered payout and a Gemini response are still unproven. Since that run, `PAYPAL_CHARITY_RECEIVER_EMAIL` has been changed away from the gmail address, so the payout step is ready to re-run. The Gemini key still returned `API_KEY_SERVICE_BLOCKED` when re-checked the same day.
 
 | Step | Result |
 | --- | --- |
@@ -112,12 +112,14 @@ The SDK printed two deprecation warnings at runtime, both for code the spike use
 
 ## To finish the spike
 
-1. Set `PAYPAL_CHARITY_RECEIVER_EMAIL` to a sandbox Personal account (developer.paypal.com > Testing Tools > Sandbox Accounts). Then run `npm run spike -- payout`.
+1. With `PAYPAL_CHARITY_RECEIVER_EMAIL` on a sandbox Personal account, run `npm run spike -- payout`.
 2. Remove the API restriction on the Gemini key, or create a new key in Google AI Studio. Then run `npm run spike -- vision`.
 
 ## Sandbox donation captures
 
 Card-funded orders with no buyer step do not work on this account: `POST /v2/checkout/orders` with `payment_source.card` and test card 4111 1111 1111 1111 returned 422 `PAYER_CANNOT_PAY` (PHP 1.00, nothing created). Cause not established. Seeded donations therefore use the normal buyer approval flow through `npm run donations:capture`.
+
+All 8 seeded orders were read back as `COMPLETED` for PHP 24,250.00. PayPal kept PHP 944.50 in fees, which fits 3.4% + PHP 15 per capture. `/v1/reporting/balances` still read PHP 5,000.00 afterwards, which adds to the unexplained balance behaviour above.
 
 ## Still unverified
 
