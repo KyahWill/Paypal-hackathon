@@ -34,6 +34,8 @@ export async function POST(request: Request) {
       description: `Donation: ${project.title}`,
       customId: encodeCustomId(project.id, anonymous),
     });
+    // The id is the only trace of an order that is approved but never captured.
+    console.info(`Created order ${order.id}: ${project.slug} ${order.status}`);
     return Response.json({ orderId: order.id });
   } catch (error) {
     console.error("Create order failed:", describeError(error));
